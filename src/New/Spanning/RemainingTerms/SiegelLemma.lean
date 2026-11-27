@@ -7,9 +7,10 @@ public import Lib.Adelic.Reduction.FirstMinimumShortBases
 public import Lib.Adelic.Reduction.MinkowskiTheorems
 import Lib.Adelic.Adeles.LocalFactors
 import Lib.Adelic.Adeles.StrongApproximation
+import Lib.Adelic.Reduction.FrameNormalization
 import Lib.Adelic.Witt.WittTheorem
 import Lib.General.Analysis.PackingAndSobolev
-import Lib.General.LinearAlgebra.PolarDecomposition
+import Lib.General.LinearAlgebra.PartnerAlgebra
 import Lib.General.NumberTheory.LatticeCovolumes
 
 /-!
@@ -439,6 +440,68 @@ lemma ideleAbs_det_mul_sqrt_eq_one {s : ℕ} {y : Matrix κ (Fin s) E}
   rw [ideleAbs_det_mkAdelicGL, ha, h_norm, ← mul_pow, Real.sqrt_sq (by positivity)]
   field_simp
 
+section SublatticeHeight
+
+variable [HasPrimitiveRoot5040 E] {P : Type} [Fintype P]
+  {L : Matrix κ P (𝔸f E)} {H : Matrix P κ (𝔸f E)}
+
+/-- The discriminant of a saturated sublattice is the reciprocal determinant modulus of any
+adelic normalisation of a rational basis in its lattice coordinates. -/
+lemma ideleAbs_det_mul_sublatticeDiscriminant_eq_one (hLH : L * H = 1)
+    {V : Submodule E (κ → E)} {y : Matrix κ (Fin (finrank E V)) E}
+    (hy : colSpan y ≤ V)
+    {r : InfinitePlace E → GL (Fin (finrank E V)) ℂ} {a : GL (Fin (finrank E V)) (𝔸f E)}
+    (hr : ∀ v : InfinitePlace E, (y.map (Φ v) * (r v).val)ᴴ * (y.map (Φ v) * (r v).val) = 1)
+    (ha : IsPrimitiveMatrix (Ô E) (H * (finAdeleMatrix y * a.val))) :
+    ideleAbs (mkAdelicGL (r, a)).det * sublatticeDiscriminant hLH V = 1 := by
+  classical
+  have hvol := ideleAbs_det_mul_sqrt_eq_one hr a
+  have hdet : (yᴴ * y).det ≠ 0 := by
+    intro hz
+    simp [hz] at hvol
+  obtain ⟨t, ht⟩ := exists_finAdeleMatrix_mul_eq_sublatticeBasis_mul hLH hy hdet a
+  have hprim := isPrimitiveMatrix_mul_sublatticeBasis hLH V
+  rw [ht, ← Matrix.mul_assoc] at ha
+  have hint := (isPrimitiveMatrix_iff_mem_intGL t).mp (hprim.mul_iff.mp ha)
+  have hunit := genIndex_det_eq_one isOpen_Ô isCompact_Ô hint
+  have hsq := sublatticeDiscriminant_sq_mul_genIndex_sq hLH ht
+  rw [hunit, one_pow, mul_one] at hsq
+  have hdisc : sublatticeDiscriminant hLH V =
+      √(genIndex a.val.det ^ 2 * |(Algebra.norm ℚ (yᴴ * y).det : ℝ)|) := by
+    have heq : sublatticeDiscriminant hLH V ^ 2 =
+        genIndex a.val.det ^ 2 * |(Algebra.norm ℚ (yᴴ * y).det : ℝ)| := by
+      simpa [← genIndex_algebraMap, RingHom.map_det, mul_comm] using hsq
+    exact (Real.sqrt_sq (Real.sqrt_nonneg _)).symm.trans (congrArg Real.sqrt heq)
+  rwa [hdisc]
+
+end SublatticeHeight
+
+/-- A rational basis of a subspace admits one adelic change of basis that is orthonormal at
+infinity and primitive for the given finite lattice coordinates. -/
+lemma exists_orthonormal_primitive_basis (V : Submodule E (κ → E)) {s : ℕ} (hs : finrank E V = s)
+    (d : GL κ (𝔸f E)) :
+    ∃ (y : Matrix κ (Fin s) E) (r : InfinitePlace E → GL (Fin s) ℂ) (a : GL (Fin s) (𝔸f E)),
+      HasLeftInv y ∧ colSpan y = V ∧
+        (∀ v : InfinitePlace E, (y.map (Φ v) * (r v).val)ᴴ * (y.map (Φ v) * (r v).val) = 1) ∧
+        IsPrimitiveMatrix (Ô E) (d.val * (finAdeleMatrix y * a.val)) := by
+  subst s
+  obtain ⟨y, hy, hspan⟩ := exists_hasLeftInv_colSpan_eq V
+  let D := mkAdelicGL (fun _ ↦ 1, d)
+  have hX : HasLeftInv (D.val * y.map toAdele) := by
+    obtain ⟨l, hl⟩ := hy.map toAdele
+    exact ⟨l * D.inv, by simp [← Matrix.mul_assoc, hl]⟩
+  obtain ⟨b, -, h⟩ := exists_blockTriangular_normalizedFrame hX (fun i ↦ i.val)
+  refine ⟨y, fun v ↦ b.map (evalInf v), b.map (RingHom.snd ..), hy, hspan, fun v ↦ ?_, ?_⟩
+  · have hv := h.orthonormal v
+    simp only [Matrix.map_mul] at hv
+    change ((1 * y.map (Φ v)) * _)ᴴ * ((1 * y.map (Φ v)) * _) = 1 at hv
+    rw [Matrix.one_mul] at hv
+    exact hv
+  · have hf := h.primitive
+    simp only [Matrix.map_mul] at hf
+    change IsPrimitiveMatrix (Ô E) ((d.val * finAdeleMatrix y) * _) at hf
+    rwa [Matrix.mul_assoc] at hf
+
 /-- Let `r v` make the columns of `y` orthonormal at each infinite place `v`, with embedding `Φ v`.
 Then the Euclidean length of `y c` over all infinite places is that of the vectors `(r v)⁻¹ (Φ v c)`
 taken together. -/
@@ -546,20 +609,13 @@ lemma siegel_lemma (u : Gf E κ) {T : Submodule E (κ → E)} {s : ℕ}
       ∃ x : Matrix κ (Fin (Module.finrank E T)) E, ∃ b : GL (Fin (Module.finrank E T)) (𝔸f E),
         HasLeftInv x ∧ colSpan x = T ∧ m = finAdeleMatrix x * b.val :=
     exists_sublatticeBasis_eq_finAdeleMatrix_mul u.val.val_inv T
-  obtain ⟨y, a, hy_inv, hy, hy_prim⟩ : ∃ y : Matrix κ (Fin s) E, ∃ a : GL (Fin s) (𝔸f E),
-      HasLeftInv y ∧ colSpan y = xᴴ.mulVecLin.ker ∧
-        IsPrimitiveMatrix (Ô E) (u.val.inv * (finAdeleMatrix y * a.val)) :=
-    exists_isPrimitiveMatrix_mul_finAdeleMatrix u.val.val_inv _
-      (finrank_ker_conjTranspose hs hx_inv)
+  obtain ⟨y, r, a, hy_inv, hy, hr, hy_prim⟩ :=
+    exists_orthonormal_primitive_basis (xᴴ.mulVecLin.ker) (finrank_ker_conjTranspose hs hx_inv)
+      u.val⁻¹
   have h_jacobi :
       genIndex a.val.det ^ 2 * |(Algebra.norm ℚ (yᴴ * y).det : ℝ)| = genIndex (mᴴ * m).det := by
     rw [hm] at hm_prim ⊢
     exact genIndex_sq_mul_abs_norm_eq u hs (mul_eq_zero_of_colSpan_le_ker hy.le) hm_prim hy_prim
-  -- At each infinite place make the columns of `y` orthonormal by `r v`.
-  have h_orth (v : InfinitePlace E) :
-      ∃ r : GL (Fin s) ℂ, (y.map (Φ v) * r.val)ᴴ * (y.map (Φ v) * r.val) = 1 :=
-    (exists_orthonormal_mul id (hy_inv.map (Φ v))).imp fun _ ↦ And.right
-  choose r hr using h_orth
   have h_normalization : ideleAbs (mkAdelicGL (r, a)).det * √(genIndex (mᴴ * m).det) = 1 := by
     rw [← h_jacobi]
     exact ideleAbs_det_mul_sqrt_eq_one hr a
