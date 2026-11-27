@@ -412,15 +412,15 @@ lemma genIndex_sq_mul_abs_norm_eq [HasPrimitiveRoot5040 E] (u : Gf E κ) {t s : 
 omit [DecidableEq κ] in
 /-- Let `r v` make the columns of `y` orthonormal at each infinite place `v`, with embedding `Φ v`,
 and let `a` be invertible over `𝔸_f`. Then `ideleAbs` of the determinant of `mkAdelicGL (r, a)`,
-times `√([det a]² |N(det yᴴ y)|)`, is at least `1`. Here `[·]` is the generalised index `genIndex`:
+times `√([det a]² |N(det yᴴ y)|)`, is `1`. Here `[·]` is the generalised index `genIndex`:
 at a unit it is the inverse of the factor by which the unit scales Haar measure on the finite
 adeles, and at a non-unit it is `0`. `N` is the norm from `E` to `ℚ`. -/
-lemma one_le_ideleAbs_det_mul_sqrt {s : ℕ} {y : Matrix κ (Fin s) E}
+lemma ideleAbs_det_mul_sqrt_eq_one {s : ℕ} {y : Matrix κ (Fin s) E}
     {r : InfinitePlace E → GL (Fin s) ℂ}
     (hr : ∀ v : InfinitePlace E, (y.map (Φ v) * (r v).val)ᴴ * (y.map (Φ v) * (r v).val) = 1)
     (a : GL (Fin s) (𝔸f E)) :
-    1 ≤ ideleAbs (mkAdelicGL (r, a)).det *
-      √(genIndex a.val.det ^ 2 * |(Algebra.norm ℚ (yᴴ * y).det : ℝ)|) := by
+    ideleAbs (mkAdelicGL (r, a)).det *
+      √(genIndex a.val.det ^ 2 * |(Algebra.norm ℚ (yᴴ * y).det : ℝ)|) = 1 := by
   -- The infinite part cancels the norm of `det yᴴ y`, the finite part the index of `det a`.
   have hr_det (v : InfinitePlace E) : ‖(r v).val.det‖ ^ 2 * ‖Φ v (yᴴ * y).det‖ = 1 := by
     have h_one : (r v).valᴴ * (yᴴ * y).map (Φ v) * (r v).val = 1 := by
@@ -437,7 +437,7 @@ lemma one_le_ideleAbs_det_mul_sqrt {s : ℕ} {y : Matrix κ (Fin s) E}
     congr 1
     exact eq_inv_of_mul_eq_one_right (by simp [← prod_mul_distrib, hr_det])
   rw [ideleAbs_det_mkAdelicGL, ha, h_norm, ← mul_pow, Real.sqrt_sq (by positivity)]
-  exact le_of_eq (by field_simp)
+  field_simp
 
 /-- Let `r v` make the columns of `y` orthonormal at each infinite place `v`, with embedding `Φ v`.
 Then the Euclidean length of `y c` over all infinite places is that of the vectors `(r v)⁻¹ (Φ v c)`
@@ -560,9 +560,9 @@ lemma siegel_lemma (u : Gf E κ) {T : Submodule E (κ → E)} {s : ℕ}
       ∃ r : GL (Fin s) ℂ, (y.map (Φ v) * r.val)ᴴ * (y.map (Φ v) * r.val) = 1 :=
     (exists_orthonormal_mul id (hy_inv.map (Φ v))).imp fun _ ↦ And.right
   choose r hr using h_orth
-  have h_vol : 1 ≤ ideleAbs (mkAdelicGL (r, a)).det * √(genIndex (mᴴ * m).det) := by
+  have h_normalization : ideleAbs (mkAdelicGL (r, a)).det * √(genIndex (mᴴ * m).det) = 1 := by
     rw [← h_jacobi]
-    exact one_le_ideleAbs_det_mul_sqrt hr a
+    exact ideleAbs_det_mul_sqrt_eq_one hr a
   -- Minkowski's second theorem for `(r, a)`: a rational basis `B i` with `a⁻¹ B i` integral and a
   -- bounded product of the lengths of the `r⁻¹ B i`, which are those of the `y B i`.
   obtain ⟨B, hB_det, haB, h_mink⟩ := exists_det_ne_zero_prod_frameLength_le r a
@@ -574,13 +574,13 @@ lemma siegel_lemma (u : Gf E κ) {T : Submodule E (κ → E)} {s : ℕ}
     exact mulVec_mem_baseLattice u (by simpa [Matrix.mul_assoc] using hy_int.mul haB) i
   · have hBi : B i = 0 := hy_inv.injective_mulVec (by simpa using h_zero)
     exact hB_det (det_eq_zero_of_row_eq_zero i (congrFun hBi))
-  · -- Trade the determinant of `(r, a)` for the discriminant by `h_vol`.
+  · -- Insert the determinant and discriminant factors before applying the Minkowski bound.
     have h_rootDiscr_pos : 0 < rootDiscr E := rootDiscr_pos E
     calc
-      _ ≤ (ideleAbs (mkAdelicGL (r, a)).det *
+      _ = (ideleAbs (mkAdelicGL (r, a)).det *
             ∏ i : Fin s, ‖((stdSpace E κ).move (1, u)).archCoords (y *ᵥ B i)‖ ^
               (2 * numInfPlaces E)) * √(genIndex (mᴴ * m).det) := by
-        grw [mul_right_comm, ← h_vol, one_mul, prod_pow]
+        rw [mul_right_comm (ideleAbs (mkAdelicGL (r, a)).det), h_normalization, one_mul, prod_pow]
       _ ≤ (8 * (numInfPlaces E * s) * rootDiscr E) ^ (numInfPlaces E * s) *
           √(genIndex (mᴴ * m).det) := by
         grw [h_mink]
