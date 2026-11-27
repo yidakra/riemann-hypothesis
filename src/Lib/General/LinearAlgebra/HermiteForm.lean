@@ -1,6 +1,7 @@
 module
 
 public import Lib.General.LinearAlgebra.IntegralLattices
+import Lib.General.LinearAlgebra.WeightedColumnReduction
 
 /-!
 # Hermite forms over valuation pairs and integral matrices over valued fields
@@ -140,36 +141,7 @@ lemma IsValuationPair.hermite (hR : IsValuationPair R) (ι : k ↪ n) (y : Matri
       y = U.val.submatrix id ι * D ∧
       -- (c) `D` consists of the rows `ι` of `U⁻¹ * y`
       U⁻¹.val.submatrix ι id * y = D := by
-  classical
-  -- Treat the columns in order of increasing weight. In each column `j ∈ s` of a reduced `U * y`,
-  -- only the rows `ι b` with `b ∈ s` and `wt b ≤ wt j` may be non-zero.
-  let IsReduced (s : Finset k) (U : GL n A) : Prop :=
-    ∀ j ∈ s, ∀ i : n, (∀ b ∈ s, i = ι b → wt j < wt b) → (U.val * y) i j = 0
-  have exists_reduced (s : Finset k) : ∃ U ∈ intGL n R, IsReduced s U := by
-    induction s using Finset.induction_on_max_value wt with
-    | empty => exact ⟨1, one_mem _, by simp [IsReduced]⟩
-    | insert a s ha hmax ih =>
-      obtain ⟨U, hU, hs⟩ := ih
-      -- in the new column `a`, clear the rows outside `ι (insert a s)`
-      obtain ⟨W, hW, hcol, hkeep⟩ := hR.exists_clear_col (U.val * y) a (i₀ := ι a)
-        (t := ((insert a s).map ι)ᶜ) (by simp)
-      -- these rows and `ι a` vanish in the columns of `s`, so these columns do not change
-      have s_cols : ∀ j ∈ s, ∀ r : n, (W.1 * (U.1 * y)) r j = (U.1 * y) r j := by grind [mem_compl]
-      refine ⟨W * U, mul_mem hW hU, fun j hj r hr ↦ ?_⟩
-      rw [Units.val_mul, Matrix.mul_assoc]
-      obtain rfl | hjs := mem_insert.1 hj
-      · -- as `wt j` is maximal, `r` is not in `ι (insert j s)`
-        exact hcol r (by grind [mem_compl])
-      · exact (s_cols j hjs r).trans (hs j hjs r (by grind))
-  obtain ⟨U, hU, hzero⟩ := exists_reduced univ
-  refine ⟨U⁻¹, inv_mem hU, (U.val * y).submatrix ι id,
-    fun i j hij ↦ hzero j (mem_univ j) (ι i) (by simpa), ?_, rfl⟩
-  -- only the rows at `ι` of `U * y` contribute to the product `y = U⁻¹ * (U * y)`
-  have hrows (i : n) (hi : i ∉ Set.range ι) (j : k) : (U.val * y) i j = 0 :=
-    hzero j (mem_univ j) i (by tauto)
-  calc y = U⁻¹.val * (U.val * y) := by simp [← Matrix.mul_assoc]
-    _ = U⁻¹.val.submatrix id ι * (U.val * y).submatrix ι id := ext fun i j ↦
-      (Fintype.sum_of_injective ι ι.injective _ _ (by simp +contextual [hrows]) fun _ ↦ rfl).symm
+  exact exists_blockTriangular_factor_of_clear_col _ hR.exists_clear_col ι y wt
 
 /-- If (A, R) satisfies `New.IsValuationPair` (any u, v in A are R-multiples of u - e(u - v) for
 some idempotent e of R) and the n × k matrix X over A has a left inverse, there is an invertible
