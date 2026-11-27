@@ -2,6 +2,7 @@ module
 
 public import Lib.ClassField.GreenbergWiles.RelationClasses
 public import New.Congruences.Selmer.SelmerData
+import Mathlib.Data.ENat.BigOperators
 import Lib.ClassField.Global.AlbertBrauerHasseNoether
 import Lib.Cyclotomic.Voronoi
 import Lib.General.NumberTheory.CoefficientRings
@@ -350,23 +351,19 @@ lemma tiedSelmerToSelmerH1_injective (hp : IsTiedPrimes ℓ S₀ V W N P₀ J x)
   exact Subtype.ext (funext fun g ↦ by simpa [hb0] using (hb g).symm)
 
 open scoped Classical in
-/-- Greenberg–Wiles bounds the length of the global Selmer classes by the dual relations and the
-local terms. Here the local estimates are for cocycles, so each local term includes its
-coboundaries and the left side includes one copy of the coefficient module per local prime. -/
+/-- The length form of Greenberg–Wiles for the tied local conditions. Each finite place contributes
+its invariants on the left and its allowed cohomology classes on the right. -/
 lemma exists_length_selmerH1_le (hp : IsTiedPrimes ℓ S₀ V W N P₀ J x)
     (hV : ∀ g : Gal(Ω/E), V i g ↔ reduceModPow ℓ M T.ρ g = 1) (hN : M < N) (ha : a ∣ ℓ ^ M)
     (A : ∀ v : FinPlace E, {A : ClosurePlace // IsPlaceOver A v}) :
+    let D := T.tiedSetting hp hV hN ha A
     ∃ R : Finset (FinPlace E),
-      length O ((T.tiedSetting hp hV hN ha A).classes ∅) +
-          (#(unionWithConj T.places (J.erase P₀)) + Core.numInfPlaces E) •
-            length O (n → QuotSpan a) ≤
+      length O (D.classes ∅) + Core.numInfPlaces E • length O (n → QuotSpan a) +
+          ∑ v ∈ D.localPrimes, length O (D.localInvariants v) ≤
         length O (T.dualSelmer hp hV hN ha A R) +
-          ∑ v ∈ unionWithConj T.places (J.erase P₀),
-            length O (localCocycles T.ρ (T.localRelations ∪ tieRelations J x i) (A v)
-              (QuotSpan a)) := by
+          ∑ v ∈ D.localPrimes, length O (D.localClasses v) := by
   have : NeZero a := ⟨ne_zero_of_dvd_ne_zero (NeZero.ne _) ha⟩
   let D : RelationSetting (T.reductionModule ha) (ℓ ^ N) := T.tiedSetting hp hV hN ha A
-  let d : ℕ := #(unionWithConj T.places (J.erase P₀)) + Core.numInfPlaces E
   -- The element `γ_*` fixes the roots of unity, is central modulo `D.subgroup` and fixes no nonzero
   -- vector.
   have h_comm (g : Gal(Ω/E)) : ⁅T.γ, g⁆ ∈ D.subgroup := by
@@ -383,40 +380,20 @@ lemma exists_length_selmerH1_le (hp : IsTiedPrimes ℓ S₀ V W N P₀ J x)
       (mt (h_avoid _) (not_not.2 (star_mem_placesDividing.2 hP₀)))
   refine ⟨R, ?_⟩
   rw [dualSelmer, hR]
-  -- Restore the local coboundaries to use the estimates for local cocycles.
-  let : TopologicalSpace (QuotSpan a) := ⊥
-  have : DiscreteTopology (QuotSpan a) := ⟨rfl⟩
-  let coeff := T.reductionModule ha
-  let localModule (v : FinPlace E) := coeff.restrictTo (decompGroup Gal(Ω/E) (D.place v))
-  let b (v : FinPlace E) := Nat.card (B1 (localModule v).ρ)
-  have h_inv (v : FinPlace E) :
-      Nat.card (localModule v).ρ.invariants * b v = Nat.card coeff :=
-    (mul_comm ..).trans (card_B1_mul_card_invariants (localModule v).continuous_orbit)
-  have h_loc (v : FinPlace E) (hv : v ∈ D.localPrimes) :
-      Nat.card (classCondition coeff (D.allowed v)) * b v = Nat.card (D.localCocycles v) :=
-    (selmerH1.card_localCocycles_eq (D.coboundary_le v hv)).symm
-  have h := Nat.mul_le_mul_right (∏ v ∈ D.localPrimes, b v) h_card
-  simp only [mul_assoc, ← prod_mul_distrib] at h
-  rw [prod_congr (s₁ := D.localPrimes) rfl (fun v _ ↦ h_inv v), prod_congr rfl h_loc,
-    prod_const, ← pow_add] at h
-  have h_prod : Nat.card (D.classes ∅ × (Fin d → n → QuotSpan a)) ≤
-      Nat.card (D.relations R × ∀ v : D.localPrimes, D.localCocycles v) := by
-    rw [Nat.card_prod, Nat.card_prod, Nat.card_fun, Nat.card_fin, Nat.card_pi (α := D.localPrimes),
-      prod_coe_sort D.localPrimes fun v ↦ Nat.card (D.localCocycles v)]
-    rw [Nat.add_comm (Fintype.card (NumberField.InfinitePlace E))] at h
-    exact h
   have : Finite (D.cocycles ∅) :=
-    (selmerZ1.finite_unramified_cocycles coeff
+    (selmerZ1.finite_unramified_cocycles (T.reductionModule ha)
       (D.localPrimes.finite_toSet.union Set.finite_empty)).subset inf_le_left
   have : Finite (D.classes ∅) := Finite.of_surjective _ (D.toSelmerH1_surjective ∅)
-  calc length O (D.classes ∅) + d • length O (n → QuotSpan a)
-      = length O (D.classes ∅ × (Fin d → n → QuotSpan a)) := by simp [length_prod]
-    _ ≤ length O (D.relations R × ∀ v : D.localPrimes, D.localCocycles v) :=
-        length_le_of_card_le ℓ h_prod
-    _ = length O (D.relations R) + ∑ v ∈ D.localPrimes, length O (D.localCocycles v) := by
-        rw [length_prod, length_pi_of_fintype O (ι := D.localPrimes),
-          sum_coe_sort D.localPrimes fun v ↦ length O (D.localCocycles v)]
-    _ ≤ _ := add_le_add_right (sum_le_sum fun v _ ↦ length_mono inf_le_left) _
+  have h_prod : Nat.card ((D.classes ∅ × (Fin (Core.numInfPlaces E) → n → QuotSpan a)) ×
+      (∀ v : D.localPrimes, D.localInvariants v)) ≤
+      Nat.card (D.relations R × ∀ v : D.localPrimes, D.localClasses v) := by
+    simpa only [Nat.card_prod, Nat.card_fun, Nat.card_fin, Nat.card_pi,
+      prod_coe_sort D.localPrimes fun v ↦ Nat.card (D.localInvariants v),
+      prod_coe_sort D.localPrimes fun v ↦ Nat.card (D.localClasses v)] using h_card
+  simpa only [length_prod, length_pi_of_fintype, sum_const, card_univ, Fintype.card_fin,
+    sum_coe_sort D.localPrimes fun v ↦ length O (D.localInvariants v),
+    sum_coe_sort D.localPrimes fun v ↦ length O (D.localClasses v)] using
+    length_le_of_card_le (R := O) ℓ h_prod
 
 /-- The modules of local cocycles with values in `T / a` that obey the local conditions, at the
 places above `ℓ`, have total length at most `(#{w ∣ ℓ} + f) len (T / a)`, where `f` is the number of
@@ -523,26 +500,37 @@ theorem exists_length_tiedSelmer_le (hp : IsTiedPrimes ℓ S₀ V W N P₀ J x)
         length O (T.dualSelmer hp hV hN ha A R) + T.placesTerm := by
   classical
   have : NeZero a := ⟨ne_zero_of_dvd_ne_zero (NeZero.ne _) ha⟩
-  let lenQuot : ℕ∞ := length O (n → QuotSpan a)
-  let S' : Finset (FinPlace E) := unionWithConj T.places (J.erase P₀)
-  let d : ℕ := #S' + Core.numInfPlaces E
-  let lenLocal (B : ClosurePlace) : ℕ∞ :=
-    length O (localCocycles T.ρ (T.localRelations ∪ tieRelations J x i) B (QuotSpan a))
-  obtain ⟨A, h_local : ∑ v ∈ S', lenLocal (A v) ≤ d • lenQuot + T.placesTerm⟩ :=
-    T.exists_sum_length_localCocycles_tied_le hp ha
+  obtain ⟨A, h_local⟩ := T.exists_sum_length_localCocycles_tied_le (i := i) hp ha
+  let D := T.tiedSetting hp hV hN ha A
+  let arch := Core.numInfPlaces E • length O (n → QuotSpan a)
+  let inv := ∑ v ∈ D.localPrimes, length O (D.localInvariants v)
+  have h_classes : ∑ v ∈ D.localPrimes, length O (D.localClasses v) ≤
+      arch + T.placesTerm + inv := by
+    apply D.sum_length_localClasses_le length_ne_top
+    calc ∑ v ∈ D.localPrimes, length O (D.localCocycles v)
+        ≤ ∑ v ∈ D.localPrimes, length O (D.allowed v) :=
+          sum_le_sum fun _ _ ↦ length_mono inf_le_left
+      _ ≤ (#D.localPrimes + Core.numInfPlaces E) • length O (n → QuotSpan a) + T.placesTerm :=
+        h_local
+      _ = _ := by rw [add_nsmul, add_assoc]
   obtain ⟨R, h_formula⟩ := T.exists_length_selmerH1_le hp hV hN ha A
-  refine ⟨A, R, (ENat.add_le_add_iff_left (k := d • lenQuot) ?_).1 ?_⟩
-  · rw [nsmul_eq_mul]
-    exact WithTop.mul_ne_top (ENat.natCast_ne_top _) length_ne_top
-  calc d • lenQuot + length O (T.tiedSelmer J J x i a)
-      ≤ length O ((T.tiedSetting hp hV hN ha A).classes ∅) + d • lenQuot := by
-        rw [add_comm]
+  have hfin : arch + inv ≠ ⊤ := by
+    apply WithTop.add_ne_top.2
+    constructor
+    · dsimp only [arch]
+      rw [nsmul_eq_mul]
+      exact WithTop.mul_ne_top (ENat.natCast_ne_top _) length_ne_top
+    · exact ENat.sum_ne_top.2 fun _ _ ↦ length_ne_top
+  refine ⟨A, R, (ENat.add_le_add_iff_right hfin).mp ?_⟩
+  calc length O (T.tiedSelmer J J x i a) + (arch + inv)
+      ≤ length O (D.classes ∅) + arch + inv := by
+        rw [add_assoc]
         exact add_le_add_left
           (length_le_of_injective _ (T.tiedSelmerToSelmerH1_injective hp hV hN ha A)) _
-    _ ≤ length O (T.dualSelmer hp hV hN ha A R) + ∑ v ∈ S', lenLocal (A v) := h_formula
-    _ ≤ length O (T.dualSelmer hp hV hN ha A R) + (d • lenQuot + T.placesTerm) :=
-        add_le_add_right h_local _
-    _ = d • lenQuot + (length O (T.dualSelmer hp hV hN ha A R) + T.placesTerm) := by ac_rfl
+    _ ≤ length O (T.dualSelmer hp hV hN ha A R) +
+        ∑ v ∈ D.localPrimes, length O (D.localClasses v) := h_formula
+    _ ≤ _ := (add_le_add_right h_classes (length O (T.dualSelmer hp hV hN ha A R))).trans_eq
+      (by ac_rfl)
 
 end New.Selmer.SelmerDatum
 

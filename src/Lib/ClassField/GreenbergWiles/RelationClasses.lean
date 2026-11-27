@@ -26,7 +26,7 @@ noncomputable section
 
 namespace New.RelationSetting
 
-open NumberField DiscreteModule Finset Fintype commutatorElement
+open NumberField DiscreteModule Finset Fintype Module commutatorElement
 
 variable {K R : Type} [Field K] [EmbeddedNumberField K] [CommRing R] {M : DiscreteModule R Gal(Ω/K)}
 
@@ -35,6 +35,37 @@ variable {m : ℕ} [NeZero m] (D : RelationSetting M m)
 /-- The Selmer classes with the local conditions of `D` and extra ramification allowed in `P`. -/
 abbrev classes (P : Set (FinPlace K)) : Submodule R (M.H 1) :=
   selmerH1 M D.localPrimes D.place D.allowed P
+
+/-- The classes of the allowed cocycles on the decomposition group at `v`. -/
+abbrev localClasses (v : FinPlace K) :=
+  classCondition M (D.allowed v)
+
+/-- The elements of the coefficient module fixed by the decomposition group at `v`. -/
+abbrev localInvariants (v : FinPlace K) :=
+  (M.restrictTo (decompGroup Gal(Ω/K) (D.place v))).ρ.invariants
+
+/-- A bound for the sum of local cocycle lengths gives a bound for the local class lengths.
+Passing to classes replaces one copy of the coefficients at each place by the local invariants. -/
+lemma sum_length_localClasses_le {b : ℕ∞} (hM : length R M ≠ ⊤)
+    (h : ∑ v ∈ D.localPrimes, length R (D.localCocycles v) ≤
+      #D.localPrimes • length R M + b) :
+    ∑ v ∈ D.localPrimes, length R (D.localClasses v) ≤
+      b + ∑ v ∈ D.localPrimes, length R (D.localInvariants v) := by
+  have hfin : #D.localPrimes • length R M ≠ ⊤ := by
+    rw [nsmul_eq_mul]
+    exact WithTop.mul_ne_top (ENat.natCast_ne_top _) hM
+  apply (ENat.add_le_add_iff_right hfin).mp
+  calc (∑ v ∈ D.localPrimes, length R (D.localClasses v)) +
+        #D.localPrimes • length R M =
+      ∑ v ∈ D.localPrimes, (length R (D.localClasses v) + length R M) := by
+        rw [sum_add_distrib, sum_const]
+    _ = ∑ v ∈ D.localPrimes,
+        (length R (D.localCocycles v) + length R (D.localInvariants v)) :=
+      sum_congr rfl fun v hv ↦ selmerH1.length_classCondition_add_length (D.coboundary_le v hv)
+    _ ≤ _ := by
+      rw [sum_add_distrib]
+      exact (add_le_add_left h (∑ v ∈ D.localPrimes, length R (D.localInvariants v))).trans_eq
+        (by ac_rfl)
 
 /-- The class of an allowed cocycle satisfies the local Selmer conditions. -/
 def toSelmerH1 (P : Set (FinPlace K)) : D.cocycles P →ₗ[R] D.classes P :=
@@ -72,12 +103,9 @@ theorem exists_card_classes_le {ℓ r : ℕ} [Fact ℓ.Prime] [IsTotallyComplex 
     (hσ_comm : ∀ g : Gal(Ω/K), ⁅σ, g⁆ ∈ D.subgroup) (hσ_fix : ∀ a : M, M.ρ σ a = a → a = 0)
     {p : ℕ} [NeZero p] (hp : D.Avoids p) :
     ∃ T : Finset (FinPlace K), D.localPrimes ⊆ T ∧ (∀ v ∈ T, ↑p ∉ v.asIdeal) ∧
-      Nat.card (selmerH1 M D.localPrimes D.place D.allowed ∅) *
-          Nat.card M ^ card (InfinitePlace K) *
-          ∏ v ∈ D.localPrimes,
-            Nat.card (M.restrictTo (decompGroup Gal(Ω/K) (D.place v))).ρ.invariants ≤
-        Nat.card (D.relations T) *
-          ∏ v ∈ D.localPrimes, Nat.card (classCondition M (D.allowed v)) := by
+      Nat.card (D.classes ∅) * Nat.card M ^ card (InfinitePlace K) *
+          ∏ v ∈ D.localPrimes, Nat.card (D.localInvariants v) ≤
+        Nat.card (D.relations T) * ∏ v ∈ D.localPrimes, Nat.card (D.localClasses v) := by
   obtain ⟨T, hST, hTp, h_cocycles⟩ := D.exists_card_cocycles_le hr hσ_cyc hσ_comm hσ_fix hp
   refine ⟨T, hST, hTp, ?_⟩
   rw [selmerH1.card_selmerZ1_eq D.unramified D.coboundary_le D.ρ_eq_one_of_isComplexConj,

@@ -3,6 +3,7 @@ module
 public import Lib.ClassField.GaloisCohomology.Cohomology
 public import Lib.ClassField.GreenbergWiles.SplitPrimeReciprocity
 import Lib.ClassField.GreenbergWiles.SelmerRelations
+import Lib.General.Algebra.FittingIdealsAndLengths
 
 /-!
 # Selmer groups of cohomology classes
@@ -200,6 +201,31 @@ theorem card_localCocycles_eq {D : Subgroup Gal(Ω/K)} {L : Submodule R (D → M
   (M.restrictTo D).card_inf_Z1_eq fun z hz ↦ by
     obtain ⟨b, hb⟩ := mem_B1_iff.1 hz
     exact hL ⟨b, funext hb⟩
+
+/-- For a local condition containing the coboundaries, the length of its classes plus the
+coefficient length equals the length of its cocycles plus that of the local invariants. -/
+theorem length_classCondition_add_length {D : Subgroup Gal(Ω/K)} {L : Submodule R (D → M)}
+    (hL : LinearMap.range (coboundaryMap (M.restrictTo D).ρ) ≤ L) :
+    Module.length R (classCondition M L) + Module.length R M =
+      Module.length R ↥(L ⊓ Z1 (M.restrictTo D).ρ) +
+        Module.length R (M.restrictTo D).ρ.invariants := by
+  let N := M.restrictTo D
+  have hB : B1 N.ρ ≤ L.comap (Z1 N.ρ).subtype := fun _ hz ↦ hL hz
+  have h_cocycles : Module.length R ↥(L ⊓ Z1 N.ρ) =
+      Module.length R (classCondition M L) + Module.length R (B1 N.ρ) := by
+    rw [← (Submodule.comapSubtypeEquivOfLe (inf_le_right : L ⊓ Z1 N.ρ ≤ _)).length_eq,
+      Submodule.comap_inf, Submodule.comap_subtype_self, inf_top_eq,
+      N.length_eq_length_map_π₁_add_length_inf_B1, inf_eq_right.2 hB]
+    rfl
+  have h_ker : LinearMap.ker (coboundaryZ1 N.continuous_orbit) = N.ρ.invariants := by
+    calc
+      _ = LinearMap.ker (coboundaryMap N.ρ) := LinearMap.ker_codRestrict ..
+      _ = N.ρ.invariants := groupCohomology.d₀₁_ker_eq_invariants (Rep.of N.ρ)
+  have h_coeff : Module.length R (B1 N.ρ) + Module.length R N.ρ.invariants = Module.length R M := by
+    have h := length_map_add_length_inf_ker ⊤ (coboundaryZ1 N.continuous_orbit)
+    rw [Submodule.map_top, range_coboundaryZ1, top_inf_eq, h_ker, Module.length_top] at h
+    exact h
+  rw [h_cocycles, add_assoc, h_coeff]
 
 /-- The arithmetic that turns a count of cocycles into a count of classes. Let `b · h = m` and
 `b_v · h_v = m` for `v ∈ S`, where `b`, `b_v` are numbers of coboundaries and `h`, `h_v` of
