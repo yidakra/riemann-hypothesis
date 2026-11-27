@@ -56,7 +56,7 @@ theorem HasLeftInv.eventually_isPrimitiveMatrix_evalAt {X : Matrix n k (𝔸f E)
 /-- Cutting a primitive normalisation down to the finite places where it is needed
 preserves its triangular shape and primitivity. -/
 private theorem exists_primitive_mul_eq_one_at_primitive {X : Matrix n k (𝔸f E)}
-    {wt : k → ℕ} {a : GL k (𝔸f E)} (ha : a.val.BlockTriangular wt)
+    {α : Type*} [LinearOrder α] {wt : k → α} {a : GL k (𝔸f E)} (ha : a.val.BlockTriangular wt)
     (hprim : IsPrimitiveMatrix (Ô E) (X * a.val)) :
     ∃ b : GL k (𝔸f E), b.val.BlockTriangular wt ∧ IsPrimitiveMatrix (Ô E) (X * b.val) ∧
       ∀ w : FinPlace E, IsPrimitiveMatrix (LocInt w).toSubring (X.map (evalAt w)) →
@@ -88,7 +88,7 @@ private theorem exists_primitive_mul_eq_one_at_primitive {X : Matrix n k (𝔸f 
 /-- An adelic frame admits a weighted normalisation that acts by the identity at each infinite
 place where its columns are already orthonormal and at each finite place where it is primitive. -/
 theorem exists_normalizedFrame_eq_one_at_normalized [DecidableEq n] {X : Matrix n k (𝔸 E)}
-    (hX : HasLeftInv X) (wt : k → ℕ) :
+    (hX : HasLeftInv X) {α : Type*} [LinearOrder α] (wt : k → α) :
     ∃ b : GL k (𝔸 E), b.val.BlockTriangular wt ∧ IsNormalizedAdelicFrame (X * b.val) ∧
       (∀ w : InfinitePlace E, (X.map (evalInf w))ᴴ * X.map (evalInf w) = 1 → b.map (evalInf w) = 1) ∧
       ∀ w : FinPlace E, let f := (evalAt w).comp (RingHom.snd (InfinitePlace E → ℂ) (𝔸f E))

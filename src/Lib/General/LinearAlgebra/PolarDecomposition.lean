@@ -1,6 +1,7 @@
 module
 
-import TauCeti.Analysis.Matrix.LDL
+import Lib.General.LinearAlgebra.UnitaryColumnReduction
+import Lib.General.LinearAlgebra.WeightedColumnReduction
 import Mathlib.Analysis.Matrix.Order
 import Mathlib.Analysis.SpecialFunctions.ContinuousFunctionalCalculus.ExpLog.Basic
 import Mathlib.RingTheory.Etale.Weakly
@@ -47,7 +48,7 @@ Notions from other files:
 
 section GramSchmidt
 
-open Matrix InnerProductSpace ComplexOrder
+open Matrix
 
 /-- Gram–Schmidt: if the complex n × k matrix X has a left inverse and wt is a weight on its
 columns with values in a linear order, then there is an invertible matrix b, block upper triangular
@@ -55,19 +56,17 @@ for wt, such that the columns of X b are orthonormal. -/
 lemma New.exists_orthonormal_mul {n k α : Type*} [Fintype n] [Fintype k] [DecidableEq k]
     [LinearOrder α] (wt : k → α) {X : Matrix n k ℂ} (hX : HasLeftInv X) :
     ∃ b : GL k ℂ, b.val.BlockTriangular wt ∧ (X * b.val)ᴴ * (X * b.val) = 1 := by
-  -- Refine `wt` to a linear order on `k` and normalise the positive-definite Gram matrix `Xᴴ * X`
-  -- by an upper-triangular change of basis.
+  classical
   obtain ⟨L, hL⟩ := hX
-  let _ : LinearOrder k :=
-    .lift' (fun i : k ↦ toLex (wt i, embeddingToCardinal i)) (fun _ _ _ ↦ by simp_all)
-  have hS : (Xᴴ * X).PosDef := PosDef.conjTranspose_mul_self X
-    (Function.LeftInverse.injective (g := (L *ᵥ ·)) fun v ↦ by simp [hL])
-  obtain ⟨G, hG_tri, hG_orth⟩ := hS.exists_isUpperTriangular_conjTranspose_mul_mul_eq_one
-  have h_orth : (X * G)ᴴ * (X * G) = 1 := by
-    simpa only [conjTranspose_mul, Matrix.mul_assoc] using
-      (show Gᴴ * (Xᴴ * X) * G = 1 by convert hG_orth)
-  have h_tri : G.BlockTriangular wt := fun _ _ hij ↦ hG_tri (Prod.Lex.toLex_lt_toLex.2 (.inl hij))
-  exact ⟨(Units.mkOfMulEqOne ((X * G)ᴴ * X) G (by rw [Matrix.mul_assoc, h_orth]))⁻¹, h_tri, h_orth⟩
+  obtain ⟨ι⟩ : Nonempty (k ↪ n) := Function.Embedding.nonempty_of_card_le
+    (card_le_of_surjective ℂ L.mulVecLin fun v ↦ ⟨X *ᵥ v, by simp [hL]⟩)
+  obtain ⟨U, hU, D, htri, hfac, -⟩ := New.exists_unitary_blockTriangular_factor ι X wt
+  obtain ⟨b, hb, hcols⟩ := New.exists_blockTriangular_change_of_factor hL htri hfac
+  refine ⟨b, hb, ?_⟩
+  have hgram : U.valᴴ * U.val = 1 := by
+    simpa [mem_unitaryGroupOf_iff, star_eq_conjTranspose] using hU
+  rw [hcols, conjTranspose_submatrix,
+    ← submatrix_mul _ _ _ id _ Function.bijective_id, hgram, submatrix_one_embedding]
 
 end GramSchmidt
 
